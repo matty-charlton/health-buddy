@@ -597,7 +597,7 @@ const HealthBuddyOnboarding = () => {
               <button
                 key={index}
                 onClick={() => processUserInput(option, message.data.field)}
-                className="text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                className="text-black text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
               >
                 {option}
               </button>
@@ -797,7 +797,7 @@ const HealthBuddyOnboarding = () => {
             <Heart className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Health Buddy</h1>
+            <h1 className="text-xl font-bold text-gray-900">Ember Health Buddy</h1>
             <p className="text-sm text-gray-600">Your AI-powered fitness companion</p>
           </div>
         </div>
@@ -817,7 +817,7 @@ const HealthBuddyOnboarding = () => {
             <div
               className={`max-w-2xl p-4 rounded-lg ${
                 message.isUser
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-blue-300 text-white'
                   : 'bg-white border border-gray-200'
               }`}
             >
@@ -825,7 +825,7 @@ const HealthBuddyOnboarding = () => {
             </div>
             {message.isUser && (
               <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                <User className="w-5 h-5 text-gray-600" />
+                <User className="w-5 h-5 text-black" />
               </div>
             )}
           </div>
