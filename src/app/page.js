@@ -1,13 +1,11 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Bot, Heart, Target, Calendar, Zap, Settings, Key } from 'lucide-react';
+import { Send, User, Bot, Heart, Target, Calendar, Zap } from 'lucide-react';
 
 const Home = () => {
   const [messages, setMessages] = useState([]);
   const [currentInput, setCurrentInput] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [userData, setUserData] = useState({
     name: '',
     fitnessLevel: '',
@@ -15,11 +13,9 @@ const Home = () => {
     barriers: [],
     schedule: '',
     motivation: '',
-    persona: null,
-    preferences: {}
+    persona: null
   });
   const [isTyping, setIsTyping] = useState(false);
-  const [conversationPhase, setConversationPhase] = useState('initial'); // initial, onboarding, personalized
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -30,111 +26,92 @@ const Home = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Load API key from localStorage on component mount
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem('health-buddy-api-key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
-      setIsConnected(true);
+  // Onboarding flow steps
+  const onboardingSteps = [
+    {
+      id: 'welcome',
+      message: "Hello! I'm your Health Buddy AI assistant. I'm here to help you build sustainable fitness habits that actually stick. What's your name?",
+      type: 'text'
+    },
+    {
+      id: 'fitness_level',
+      message: "Nice to meet you, {name}! Let's start by understanding where you are right now. How would you describe your current fitness level?",
+      type: 'choice',
+      options: [
+        'Complete beginner - haven\'t exercised in years',
+        'Sporadic exerciser - on and off again',
+        'Regular but struggling with consistency',
+        'Fairly active but want to improve'
+      ]
+    },
+    {
+      id: 'goals',
+      message: "What are your main health and fitness goals? (You can select multiple)",
+      type: 'multiple_choice',
+      options: [
+        'Lose weight and feel more confident',
+        'Build strength and muscle',
+        'Improve cardiovascular health',
+        'Reduce stress and improve mental health',
+        'Increase energy levels',
+        'Set a good example for my family'
+      ]
+    },
+    {
+      id: 'barriers',
+      message: "What has prevented you from sticking to exercise routines in the past? Understanding this helps me provide better support.",
+      type: 'multiple_choice',
+      options: [
+        'Lack of time due to work/family',
+        'Losing motivation after a few weeks',
+        'Feeling overwhelmed by complex routines',
+        'Getting injured or too sore',
+        'Lack of accountability or support',
+        'Boring or repetitive workouts'
+      ]
+    },
+    {
+      id: 'schedule',
+      message: "When do you typically have time for exercise? This helps me suggest the right moments for activity.",
+      type: 'choice',
+      options: [
+        'Early morning (6-8am)',
+        'Lunch break (12-2pm)',
+        'Early evening (5-7pm)',
+        'Late evening (7-9pm)',
+        'Weekends mainly',
+        'Very irregular - depends on the day'
+      ]
+    },
+    {
+      id: 'motivation_style',
+      message: "How do you prefer to be motivated? This shapes how I'll communicate with you daily.",
+      type: 'choice',
+      options: [
+        'Gentle encouragement and understanding',
+        'Direct challenges and accountability',
+        'Data-driven insights and progress tracking',
+        'Social support and community'
+      ]
+    },
+    {
+      id: 'persona_reveal',
+      message: "Based on your responses, I can see you're a {persona}. I've created a personalised plan that addresses your specific challenges. Ready to see your Health Buddy setup?",
+      type: 'persona'
     }
-  }, []);
+  ];
 
-  const saveApiKey = (key) => {
-    localStorage.setItem('health-buddy-api-key', key);
-    setApiKey(key);
-    setIsConnected(true);
-    setShowSettings(false);
-  };
-
-  const addMessage = (content, isUser = false, type = 'text', data = null) => {
-    const message = {
-      id: Date.now(),
-      content,
-      isUser,
-      type,
-      data,
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, message]);
-  };
-
-  const simulateTyping = (callback, delay = 1500) => {
-    setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      callback();
-    }, delay);
-  };
-
-  // Enhanced Claude API call with proper error handling
-  const callClaudeAPI = async (userMessage, context = {}) => {
-    if (!apiKey) {
-      throw new Error('API key not configured');
-    }
-
-    const systemPrompt = `You are Health Buddy, an AI fitness motivation assistant. You help people build sustainable exercise habits through personalized support and behavioral psychology.
-
-Current user context: ${JSON.stringify(context, null, 2)}
-
-Your personality:
-- Warm, encouraging, and supportive
-- Use behavioral psychology principles
-- Focus on building sustainable habits
-- Celebrate small wins
-- Address psychological barriers to exercise
-- Provide practical, actionable advice
-
-Based on the conversation phase:
-- If initial: Welcome warmly and start gathering basic information
-- If onboarding: Ask thoughtful questions to understand their fitness background, goals, and challenges
-- If personalized: Provide tailored advice based on their specific persona and needs
-
-Keep responses conversational, empathetic, and focused on motivation. Ask follow-up questions to better understand their situation.`;
-
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-sonnet-20240229',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'user',
-              content: userMessage
-            }
-          ],
-          system: systemPrompt
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API call failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.content[0].text;
-    } catch (error) {
-      console.error('Claude API Error:', error);
-      throw error;
-    }
-  };
-
+  // Persona mapping based on responses
   const determinePersona = (data) => {
-    const hasTimeBarriers = data.barriers.some(b => b.toLowerCase().includes('time'));
-    const hasMotivationIssues = data.barriers.some(b => b.toLowerCase().includes('motivation'));
-    const hasOverwhelm = data.barriers.some(b => b.toLowerCase().includes('overwhelm'));
-    const isHealthFocused = data.goals.some(g => g.toLowerCase().includes('health'));
+    const hasTimeBarriers = data.barriers.includes('Lack of time due to work/family');
+    const isInconsistent = data.fitnessLevel.includes('Sporadic') || data.barriers.includes('Losing motivation');
+    const isOverwhelmed = data.barriers.includes('Feeling overwhelmed');
     
-    if (hasTimeBarriers && data.goals.some(g => g.toLowerCase().includes('family'))) {
+    if (hasTimeBarriers && data.goals.includes('Set a good example for my family')) {
       return 'Corporate Millennial';
-    } else if (isHealthFocused && !hasOverwhelm) {
+    } else if (data.goals.includes('Improve cardiovascular health') && !isOverwhelmed) {
       return 'Health-Conscious Gen X';
-    } else if (hasOverwhelm || data.fitnessLevel.toLowerCase().includes('beginner')) {
+    } else if (isOverwhelmed || data.fitnessLevel.includes('Complete beginner')) {
       return 'Reluctant Exerciser';
     } else {
       return 'Health Enthusiast';
@@ -175,134 +152,175 @@ Keep responses conversational, empathetic, and focused on motivation. Ask follow
     return insights[persona] || insights['Health Enthusiast'];
   };
 
-  const processUserInput = async (input) => {
-    if (!isConnected) {
-      addMessage("Please configure your Claude API key in settings first.", false, 'error');
-      setShowSettings(true);
-      return;
+  const addMessage = (content, isUser = false, type = 'text', data = null) => {
+    const message = {
+      id: Date.now(),
+      content,
+      isUser,
+      type,
+      data,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, message]);
+  };
+
+  const simulateTyping = (callback, delay = 1500) => {
+    setIsTyping(true);
+    setTimeout(() => {
+      setIsTyping(false);
+      callback();
+    }, delay);
+  };
+
+  const processUserInput = (input, stepType = 'text') => {
+    addMessage(input, true);
+    
+    if (stepType === 'choice' || stepType === 'multiple_choice') {
+      // Handle choice selections
+      const step = onboardingSteps[currentStep];
+      if (step.id === 'fitness_level') {
+        setUserData(prev => ({ ...prev, fitnessLevel: input }));
+      } else if (step.id === 'schedule') {
+        setUserData(prev => ({ ...prev, schedule: input }));
+      } else if (step.id === 'motivation_style') {
+        setUserData(prev => ({ ...prev, motivation: input }));
+      }
+    } else if (onboardingSteps[currentStep]?.id === 'welcome') {
+      setUserData(prev => ({ ...prev, name: input }));
     }
 
-    addMessage(input, true);
-    setIsTyping(true);
-
-    try {
-      const context = {
-        userData,
-        conversationPhase,
-        previousMessages: messages.slice(-5) // Last 5 messages for context
-      };
-
-      const aiResponse = await callClaudeAPI(input, context);
-      
-      // Check if we should update user data based on the conversation
-      if (conversationPhase === 'onboarding') {
-        updateUserDataFromResponse(input, aiResponse);
+    // Add selections to user data for multiple choice
+    if (stepType === 'multiple_choice') {
+      const step = onboardingSteps[currentStep];
+      if (step.id === 'goals') {
+        setUserData(prev => ({ ...prev, goals: [...prev.goals, input] }));
+        return; // Don't advance step for multiple choice
+      } else if (step.id === 'barriers') {
+        setUserData(prev => ({ ...prev, barriers: [...prev.barriers, input] }));
+        return;
       }
+    }
 
-      setIsTyping(false);
-      addMessage(aiResponse, false, 'ai_response');
-
-      // Progress conversation phase if appropriate
-      if (conversationPhase === 'initial' && messages.length > 2) {
-        setConversationPhase('onboarding');
-      } else if (conversationPhase === 'onboarding' && shouldMoveToPersonalized()) {
-        setConversationPhase('personalized');
+    // Advance to next step
+    simulateTyping(() => {
+      const nextStep = currentStep + 1;
+      if (nextStep < onboardingSteps.length) {
+        setCurrentStep(nextStep);
+        const step = onboardingSteps[nextStep];
+        let message = step.message;
+        
+        if (step.id === 'persona_reveal') {
+          const persona = determinePersona(userData);
+          setUserData(prev => ({ ...prev, persona }));
+          message = message.replace('{persona}', persona);
+        } else {
+          message = message.replace('{name}', userData.name);
+        }
+        
+        addMessage(message, false, step.type, step);
+      } else {
+        // Onboarding complete
         showPersonaSetup();
       }
-
-    } catch (error) {
-      setIsTyping(false);
-      addMessage(`Sorry, I encountered an error: ${error.message}. Please check your API key and try again.`, false, 'error');
-    }
-  };
-
-  const updateUserDataFromResponse = (userInput, aiResponse) => {
-    const input = userInput.toLowerCase();
-    
-    // Extract name
-    if (!userData.name && (input.includes('my name is') || input.includes("i'm ") || input.includes("i am "))) {
-      const nameMatch = input.match(/(?:my name is|i'm|i am)\s+([a-zA-Z]+)/);
-      if (nameMatch) {
-        setUserData(prev => ({ ...prev, name: nameMatch[1] }));
-      }
-    }
-
-    // Extract fitness level
-    if (input.includes('beginner') || input.includes('new to') || input.includes('never')) {
-      setUserData(prev => ({ ...prev, fitnessLevel: 'beginner' }));
-    } else if (input.includes('intermediate') || input.includes('sometimes') || input.includes('on and off')) {
-      setUserData(prev => ({ ...prev, fitnessLevel: 'intermediate' }));
-    } else if (input.includes('advanced') || input.includes('regularly') || input.includes('experienced')) {
-      setUserData(prev => ({ ...prev, fitnessLevel: 'advanced' }));
-    }
-
-    // Extract goals
-    const goalKeywords = ['lose weight', 'build muscle', 'get stronger', 'improve health', 'reduce stress', 'increase energy'];
-    goalKeywords.forEach(goal => {
-      if (input.includes(goal) && !userData.goals.includes(goal)) {
-        setUserData(prev => ({ ...prev, goals: [...prev.goals, goal] }));
-      }
     });
-
-    // Extract barriers
-    const barrierKeywords = ['no time', 'busy', 'tired', 'motivation', 'overwhelmed', 'injured'];
-    barrierKeywords.forEach(barrier => {
-      if (input.includes(barrier) && !userData.barriers.includes(barrier)) {
-        setUserData(prev => ({ ...prev, barriers: [...prev.barriers, barrier] }));
-      }
-    });
-  };
-
-  const shouldMoveToPersonalized = () => {
-    return userData.name && (userData.fitnessLevel || userData.goals.length > 0) && messages.length > 8;
   };
 
   const showPersonaSetup = () => {
-    const persona = determinePersona(userData);
+    const persona = userData.persona || determinePersona(userData);
     const insights = getPersonaInsights(persona);
     
-    setUserData(prev => ({ ...prev, persona }));
-    
-    setTimeout(() => {
-      addMessage("Based on our conversation, I've identified your fitness personality and created a personalized plan for you!", false, 'persona_setup', {
-        persona,
-        insights,
-        userData
-      });
-    }, 1000);
+    addMessage("Perfect! Here's your personalised Health Buddy setup:", false, 'persona_setup', {
+      persona,
+      insights,
+      userData
+    });
+  };
+
+  const handleMultipleChoiceFinish = (stepId) => {
+    simulateTyping(() => {
+      const nextStep = currentStep + 1;
+      if (nextStep < onboardingSteps.length) {
+        setCurrentStep(nextStep);
+        const step = onboardingSteps[nextStep];
+        let message = step.message.replace('{name}', userData.name);
+        addMessage(message, false, step.type, step);
+      }
+    });
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!currentInput.trim()) return;
 
-    processUserInput(currentInput);
+    const step = onboardingSteps[currentStep];
+    processUserInput(currentInput, step?.type);
     setCurrentInput('');
   };
 
-  const initializeConversation = async () => {
-    if (!isConnected) {
-      addMessage("Welcome to Health Buddy! Please configure your Claude API key in settings to get started.", false, 'welcome');
-      return;
-    }
-
-    try {
-      const initialResponse = await callClaudeAPI("Hello, I'm new here and looking for help with fitness motivation.", {
-        conversationPhase: 'initial'
-      });
-      addMessage(initialResponse, false, 'welcome');
-    } catch (error) {
-      addMessage("Welcome to Health Buddy! I'm here to help you build sustainable fitness habits. What's your name?", false, 'welcome');
-    }
-  };
-
   useEffect(() => {
+    // Start onboarding
     if (messages.length === 0) {
-      simulateTyping(initializeConversation, 500);
+      simulateTyping(() => {
+        addMessage(onboardingSteps[0].message, false, onboardingSteps[0].type, onboardingSteps[0]);
+      }, 500);
     }
-  }, [isConnected]);
+  }, []);
 
   const renderMessage = (message) => {
+    if (message.type === 'choice' && !message.isUser) {
+      return (
+        <div className="space-y-2">
+          <p className="text-gray-800">{message.content}</p>
+          <div className="grid gap-2 mt-3">
+            {message.data.options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => processUserInput(option, 'choice')}
+                className="text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (message.type === 'multiple_choice' && !message.isUser) {
+      return (
+        <div className="space-y-2">
+          <p className="text-gray-800">{message.content}</p>
+          <div className="grid gap-2 mt-3">
+            {message.data.options.map((option, index) => (
+              <button
+                key={index}
+                onClick={() => {
+                  const step = onboardingSteps[currentStep];
+                  if (step.id === 'goals') {
+                    setUserData(prev => ({ ...prev, goals: [...prev.goals, option] }));
+                    addMessage(option, true);
+                  } else if (step.id === 'barriers') {
+                    setUserData(prev => ({ ...prev, barriers: [...prev.barriers, option] }));
+                    addMessage(option, true);
+                  }
+                }}
+                className="text-left p-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                disabled={message.data.id === 'goals' ? userData.goals.includes(option) : userData.barriers.includes(option)}
+              >
+                {option}
+              </button>
+            ))}
+            <button
+              onClick={() => handleMultipleChoiceFinish(message.data.id)}
+              className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Continue with selected options
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (message.type === 'persona_setup' && !message.isUser) {
       const { persona, insights } = message.data;
       return (
@@ -335,12 +353,7 @@ Keep responses conversational, empathetic, and focused on motivation. Ask follow
                 </ul>
               </div>
             </div>
-            <button 
-              onClick={() => {
-                processUserInput("I'm ready to start my personalized fitness journey! What's my first step?");
-              }}
-              className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors font-medium"
-            >
+            <button className="mt-4 w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-colors font-medium">
               Start My Health Journey
             </button>
           </div>
@@ -348,85 +361,21 @@ Keep responses conversational, empathetic, and focused on motivation. Ask follow
       );
     }
 
-    if (message.type === 'error') {
-      return (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-red-800">{message.content}</p>
-        </div>
-      );
-    }
-
-    return <p className="text-gray-800 whitespace-pre-wrap">{message.content}</p>;
+    return <p className="text-gray-800">{message.content}</p>;
   };
-
-  const SettingsPanel = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div className="flex items-center gap-2 mb-4">
-          <Settings className="w-6 h-6 text-gray-600" />
-          <h2 className="text-xl font-bold">Settings</h2>
-        </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Claude API Key
-            </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Claude API key"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Get your API key from console.anthropic.com
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => saveApiKey(apiKey)}
-              disabled={!apiKey.trim()}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => setShowSettings(false)}
-              className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-purple-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Health Buddy</h1>
-              <p className="text-sm text-gray-600">
-                Your AI-powered fitness companion
-                {isConnected && <span className="text-green-600 ml-2">● Connected</span>}
-              </p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center">
+            <Heart className="w-6 h-6 text-white" />
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Ember Health Buddy</h1>
+            <p className="text-sm text-gray-600">Your AI-powered fitness companion</p>
+          </div>
         </div>
       </div>
 
@@ -446,8 +395,6 @@ Keep responses conversational, empathetic, and focused on motivation. Ask follow
               className={`max-w-md p-3 rounded-lg ${
                 message.isUser
                   ? 'bg-blue-600 text-white'
-                  : message.type === 'error'
-                  ? 'bg-red-50 border border-red-200'
                   : 'bg-white border border-gray-200'
               }`}
             >
@@ -479,28 +426,32 @@ Keep responses conversational, empathetic, and focused on motivation. Ask follow
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-200 bg-white p-4">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
-            value={currentInput}
-            onChange={(e) => setCurrentInput(e.target.value)}
-            placeholder={isConnected ? "Type your message..." : "Configure API key first..."}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={isTyping || !isConnected}
-          />
-          <button
-            type="submit"
-            disabled={!currentInput.trim() || isTyping || !isConnected}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </form>
-      </div>
-
-      {/* Settings Modal */}
-      {showSettings && <SettingsPanel />}
+      {currentStep < onboardingSteps.length && onboardingSteps[currentStep]?.type === 'text' && (
+        <div className="border-t border-gray-200 bg-white p-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={currentInput}
+              onChange={(e) => setCurrentInput(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && currentInput.trim() && !isTyping) {
+                  handleSubmit(e);
+                }
+              }}
+              placeholder="Type your response..."
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isTyping}
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={!currentInput.trim() || isTyping}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
