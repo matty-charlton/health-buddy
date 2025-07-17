@@ -649,8 +649,8 @@ const HealthBuddyOnboarding = () => {
                   }}
                   className={`text-left p-3 border rounded-lg transition-colors ${
                     isSelected 
-                      ? 'bg-blue-100 border-blue-300 text-blue-800' 
-                      : 'border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                      ? 'bg-blue-100 text-black border-blue-300' 
+                      : 'border-gray-200 text-black hover:bg-blue-50 hover:border-blue-300'
                   }`}
                   disabled={isSelected}
                 >
@@ -817,7 +817,7 @@ const HealthBuddyOnboarding = () => {
             <div
               className={`max-w-2xl p-4 rounded-lg ${
                 message.isUser
-                  ? 'bg-blue-300 text-white'
+                  ? 'bg-[#f3b54f] text-white'
                   : 'bg-white border border-gray-200'
               }`}
             >
